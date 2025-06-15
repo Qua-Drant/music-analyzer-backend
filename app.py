@@ -1,25 +1,30 @@
+# backend/app.py
+
 import os
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
-# 引入你的分析脚本（我们稍后会创建它）
 import model_analyzer
 
-# 初始化 Flask 应用
 app = Flask(__name__)
-# 允许来自前端的跨域请求
 CORS(app)
 
-# 创建一个用于保存上传文件的文件夹
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# ===============================================================
+# 【新增的诊断路由】
+# 这是一个最简单的路由，用于测试服务器是否在正常运行。
+# ===============================================================
+@app.route('/')
+def health_check():
+    return "Backend is running!"
 
-# 定义一个 API 端点，用于处理文件上传和分析
+# 您原来的分析路由
 @app.route('/analyze', methods=['POST'])
 def analyze_music():
+    # ... 您现有的 analyze_music 函数代码保持不变 ...
     """
     接收上传的音乐文件，调用模型进行分析，并返回结果。
     """
