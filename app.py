@@ -54,9 +54,3 @@ def analyze_music():
         return jsonify(analysis_result)
 
     return jsonify({"error": "文件上传失败"}), 500
-
-
-# 启动服务器
-# if __name__ == '__main__':
-#     # 使用 0.0.0.0 使其在网络上可见，端口设为 5000
-#     app.run(host='0.0.0.0', port=5000, debug=True)

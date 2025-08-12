@@ -1,65 +1,62 @@
-import json
-import random
+# backend/model_analyzer.py (更新版)
+
+import os
+import torch
+# 确保可以从 masterwork_2 模块中正确导入
+from masterwork_2.extract_music import extract_music_embedding
+from masterwork_2.infer_music_reviews import MusicReviewInference
+from masterwork_2.infer_music_score import MusicReviewScorer
+
+# 【关键修复】使用相对路径来定位权重文件，使其在任何服务器上都能工作
+# 获取当前文件所在的目录
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 构造权重文件的绝对路径
+REVIEW_MODEL_PATH = os.path.join(BASE_DIR, 'weights', 'best_model_new.pt')
+SCORE_MODEL_PATH = os.path.join(BASE_DIR, 'weights', 'final_model_score.pth')
 
 
-def analyze(track_name, file_path):
+# 我们将您的处理逻辑封装在一个名为 analyze 的函数中，以便 app.py 调用
+def analyze(track_name, mp3_path):
     """
-    这是一个模拟的分析函数。
-    它接收音轨名称和文件路径，然后生成一个评分和评论。
-
-    TODO: 在这里替换成你真实的深度学习模型调用代码。
-
-    Args:
-        track_name (str): 音乐文件的原始名称。
-        file_path (str): 文件在服务器上的保存路径。
-
-    Returns:
-        dict: 一个包含音轨名称、评分和评论的字典。
+    使用真实的深度学习模型来处理上传的音乐文件。
     """
-    print(f"正在分析文件: {track_name} at {file_path}")
+    try:
+        # Step 1: 提取音乐嵌入
+        # 不再需要 strip('"')，因为文件路径由我们的服务器直接提供
+        music_data = extract_music_embedding(mp3_path)
+        if music_data is None:
+            print("无法提取音乐片段，请检查输入参数。")
+            # 【修改】返回一个错误信息的字典
+            return {"error": "无法处理该音频文件。"}
 
-    # --- 你的模型处理代码应该从这里开始 ---
-    # 例如：
-    # from your_model_library import load_model, predict
-    # model = load_model('path/to/your/model.h5')
-    # score, comment_text = predict(file_path)
+        music_embedding = music_data['embedding']
 
-    # --- 目前，我们只使用假数据作为占位符 ---
-    # 移除文件扩展名以获得更干净的曲目名称
-    track_name_clean = track_name.split('.')[0]
+        # Step 2: 使用音乐嵌入生成评论
+        # 【修改】使用我们构造的相对路径加载模型
+        review_inference = MusicReviewInference(weights_path=REVIEW_MODEL_PATH)
+        reviews = review_inference.generate_reviews([music_embedding])
+        review_text = reviews[0]
 
-    # 生成一个 1 到 5 星之间的随机评分
-    score = round(random.uniform(3.5, 5.0), 1)
+        # Step 3: 使用音乐嵌入和评论文本进行打分
+        # 【修改】使用我们构造的相对路径加载模型
+        scorer = MusicReviewScorer(model_path=SCORE_MODEL_PATH)
+        score = scorer.predict_score(music_embedding, review_text)
 
-    # 根据评分选择一个随机评论
-    comments_good = [
-        "节奏感十足，让人忍不住跟着摇摆！",
-        "旋律优美，情感真挚，是一首能触动心灵的佳作。",
-        "编曲富有层次感，乐器的搭配恰到好处。"
-    ]
-    comments_ok = [
-        "整体还不错，但在某些段落可以更有创意一些。",
-        "一首中规中矩的歌曲，适合在放松时聆听。",
-        "旋律有一定的吸引力，但记忆点不够深刻。"
-    ]
+        # 确保评分是一个 Python 内置的数字类型，而不是 numpy 或 tensor 类型
+        # 假设 score 是一个 numpy array 或者单元素 tensor
+        if hasattr(score, 'item'):
+            score = score.item()
 
-    if score > 4.0:
-        comment_text = random.choice(comments_good)
-    else:
-        comment_text = random.choice(comments_ok)
+        final_score = round(float(score), 1)
 
-    # --- 模型处理代码结束 ---
+        # Step 4: 【修改】返回一个包含结果的字典，而不是打印
+        print(f"曲目: {track_name}, 评论: {review_text}, 打分: {final_score}")
+        return {
+            "track_name": track_name.split('.')[0],
+            "rating": final_score,
+            "comment": review_text
+        }
 
-    # 按照你的要求，创建一个字典来保存结果
-    # 我们直接返回字典，由 Flask 的 jsonify 转换为 JSON，这比写文件更高效
-    result = {
-        "track_name": track_name_clean,
-        "rating": score,
-        "comment": comment_text
-    }
-
-    # 如果你仍然需要生成 .jsonl 文件，可以取消下面的注释
-    # with open('analysis_history.jsonl', 'a') as f:
-    #     f.write(json.dumps(result) + '\n')
-
-    return result
+    except Exception as e:
+        print(f"处理音频时发生错误: {e}")
+        return {"error": f"模型处理失败: {e}"}
